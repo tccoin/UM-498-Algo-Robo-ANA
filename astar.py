@@ -107,33 +107,30 @@ class AstarSearch():
                 draw_line(last_point, point, 10, (0, 0, 0))
             last_point = point
 
-    def search(self):
-        # initialize PyBullet
-        connect(use_gui=True)
-        # load robot and obstacle resources
+    def search(self, use_gui=True):
+        # init PyBullet
+        connect(use_gui=use_gui)
         robots, obstacles = load_env('pr2doorway.json')
-
-        # define active DoFs
         base_joints = [joint_from_name(robots['pr2'], name)
                        for name in PR2_GROUPS['base']]
+        self.collision_fn = get_collision_fn_PR2(
+            robots['pr2'], base_joints, list(obstacles.values()))
 
         # init states
         start_config = tuple(get_joint_positions(robots['pr2'], base_joints))
         goal_config = (2.6, -1.3, -np.pi/2)
-        path = []
-        start_time = time.time()
-        self.collision_fn = get_collision_fn_PR2(
-            robots['pr2'], base_joints, list(obstacles.values()))
-
         self.open_list = PriorityQueue()
         self.close_list = {}
         self.start_node = Node(start_config)
         self.goal_node = Node(goal_config)
-
-        final_node = None
-        final_cost = 0
         solution_found = False
 
+        # statics
+        start_time = time.time()
+        final_node = None
+        final_cost = 0
+
+        # main loop
         self._put_new_nodes(self.start_node)
         while not self.open_list.empty():
             current_step = self.open_list.get()
@@ -146,12 +143,14 @@ class AstarSearch():
             else:
                 self._put_new_nodes(current_node)
 
+        # get path
         path = [final_node.get_config()]
         while final_node.parent is not None:
             final_node = final_node.parent
             path += [final_node.get_config()]
         path.reverse()
 
+        # print statics
         if solution_found:
             print('Solution Found!!!')
             print('    Using {}-connected nerighbors'.format(self.n_connected))
@@ -160,14 +159,13 @@ class AstarSearch():
         else:
             print('No Solution Found')
 
-        ######################
         # Execute planned path
-        execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
-        # Keep graphics window opened
+        if use_gui:
+            execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
         wait_if_gui()
         disconnect()
 
 
 if __name__ == '__main__':
     astar = AstarSearch(n_connected=4, grid_size=[0.6, 0.1, np.pi/2])
-    astar.search()
+    astar.search(use_gui=False)
