@@ -51,7 +51,8 @@ class Node:
 
 
 class AstarSearch():
-    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2]):
+    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2], goal_config=(2.6, 1.4, -np.pi/2)):
+        self.goal_config = goal_config
         self.n_connected = n_connected
         self.grid_size = grid_size
 
@@ -110,7 +111,7 @@ class AstarSearch():
     def search(self, use_gui=True):
         # init PyBullet
         connect(use_gui=use_gui)
-        robots, obstacles = load_env('pr2doorway.json')
+        robots, obstacles = load_env('pr2playground.json')
         base_joints = [joint_from_name(robots['pr2'], name)
                        for name in PR2_GROUPS['base']]
         self.collision_fn = get_collision_fn_PR2(
@@ -122,7 +123,7 @@ class AstarSearch():
         self.open_list = PriorityQueue()
         self.close_list = {}
         self.start_node = Node(start_config)
-        self.goal_node = Node(goal_config)
+        self.goal_node = Node(self.goal_config)
         solution_found = False
 
         # statics

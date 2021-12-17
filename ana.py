@@ -51,9 +51,11 @@ class Node:
 
 
 class ANASearch():
-    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2]):
+    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2], goal_config=(2.6, 1.4, -np.pi/2), timeout=30):
+        self.goal_config = goal_config
         self.n_connected = n_connected
         self.grid_size = grid_size
+        self.timeout = timeout
 
     def _angle_clip(self, angle):
         if angle >= np.pi:
@@ -109,9 +111,7 @@ class ANASearch():
 
     def _update_open_list(self):
         node_map = {}
-        i = 0
         while not self.open_list.empty():
-            i += 1
             e, _, node = self.open_list.get()
             config = node.get_config()
             if node.total_cost+node.heuristic >= self.G:
@@ -119,12 +119,9 @@ class ANASearch():
             if (not config in node_map) or (node.total_cost < node_map[config].total_cost):
                 node_map[config] = node
         self.open_list = PriorityQueue()
-        j = 0
         for _, node in node_map.items():
-            j += 1
             e = (self.G-node.total_cost)/node.heuristic
             self.open_list.put((-1*e, node.id, node))
-        print(i, j)
 
     def _is_goal(self, node):
         return node.heuristic < 0.01
@@ -132,7 +129,7 @@ class ANASearch():
     def search(self, use_gui=True):
         # init PyBullet
         connect(use_gui=use_gui)
-        robots, obstacles = load_env('pr2doorway.json')
+        robots, obstacles = load_env('pr2playground.json')
         base_joints = [joint_from_name(robots['pr2'], name)
                        for name in PR2_GROUPS['base']]
         self.collision_fn = get_collision_fn_PR2(
@@ -140,10 +137,9 @@ class ANASearch():
 
         # init states
         start_config = tuple(get_joint_positions(robots['pr2'], base_joints))
-        goal_config = (2.6, -1.3, -np.pi/2)
         self.open_list = PriorityQueue()
         self.start_node = Node(start_config)
-        self.goal_node = Node(goal_config)
+        self.goal_node = Node(self.goal_config)
         self.close_list = {}
         self.history = []
         self.G = 1000000
@@ -164,9 +160,9 @@ class ANASearch():
                 current_step = self.open_list.get()
                 current_priority, _, current_node = current_step
                 current_e = -1 * current_priority
-                if(time.time()-debug_time > 1):
-                    debug_time = time.time()
-                    print(current_e)
+                # if(time.time()-debug_time > 1):
+                #     debug_time = time.time()
+                #     print(current_e)
                 if current_e < self.E:
                     self.E = current_e
                 if self._is_goal(current_node):
@@ -177,18 +173,22 @@ class ANASearch():
                     break
                 else:
                     self._put_new_nodes(current_node)
-            print('[ANA* {}]Solution E={:.4f} G={:.4f}'.format(
-                self.n_connected,
-                self.E,
-                self.G
-            ))
-            print('[ANA* {}]Solution Cost={:.4f} time={:.4f}'.format(
-                self.n_connected,
-                final_cost,
-                time.time() - start_time
-            ))
-            self.close_list = {}
-            self._update_open_list()
+                if time.time()-start_time > self.timeout:
+                    self.open_list = PriorityQueue()
+                    break
+            # print('[ANA* {}]Solution E={:.4f} G={:.4f}'.format(
+            #     self.n_connected,
+            #     self.E,
+            #     self.G
+            # ))
+            if not time.time()-start_time > self.timeout:
+                print('[ANA* {}] Solution Cost={} time={:.4f}'.format(
+                    self.n_connected,
+                    final_cost,
+                    time.time() - start_time
+                ))
+                self.close_list = {}
+                self._update_open_list()
 
         # get path
         path = [final_node.get_config()]
