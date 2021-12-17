@@ -50,7 +50,7 @@ class Node:
         )
 
 
-class AstarSearch():
+class ANASearch():
     def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2]):
         self.n_connected = n_connected
         self.grid_size = grid_size
@@ -91,12 +91,12 @@ class AstarSearch():
         return new_nodes
 
     def _put_new_nodes(self, current_node):
+        self.close_list[current_node.get_config()] = 1
         new_nodes = self._generate_new_nodes(current_node)
         for node in new_nodes:
-            if not node.get_config() in self.close_list:
-                self.open_list.put(
-                    (node.total_cost+node.heuristic, node.id, node))
-                self.close_list[node.get_config()] = 1
+            if (node.total_cost+node.heuristic < self.G) and (not node.get_config() in self.close_list):
+                e = (self.G-node.total_cost)/(node.heuristic+0.001)
+                self.open_list.put((-1*e, node.id, node))
 
     def _draw_path(self, path):
         last_point = None
@@ -106,6 +106,28 @@ class AstarSearch():
             if last_point is not None:
                 draw_line(last_point, point, 10, (0, 0, 0))
             last_point = point
+
+    def _update_open_list(self):
+        node_map = {}
+        i = 0
+        while not self.open_list.empty():
+            i += 1
+            e, _, node = self.open_list.get()
+            config = node.get_config()
+            if node.total_cost+node.heuristic >= self.G:
+                continue
+            if (not config in node_map) or (node.total_cost < node_map[config].total_cost):
+                node_map[config] = node
+        self.open_list = PriorityQueue()
+        j = 0
+        for _, node in node_map.items():
+            j += 1
+            e = (self.G-node.total_cost)/node.heuristic
+            self.open_list.put((-1*e, node.id, node))
+        print(i, j)
+
+    def _is_goal(self, node):
+        return node.heuristic < 0.01
 
     def search(self, use_gui=True):
         # init PyBullet
@@ -120,28 +142,53 @@ class AstarSearch():
         start_config = tuple(get_joint_positions(robots['pr2'], base_joints))
         goal_config = (2.6, -1.3, -np.pi/2)
         self.open_list = PriorityQueue()
-        self.close_list = {}
         self.start_node = Node(start_config)
         self.goal_node = Node(goal_config)
+        self.close_list = {}
+        self.history = []
+        self.G = 1000000
+        self.E = 1000000
         solution_found = False
 
         # statics
         start_time = time.time()
+        debug_time = time.time()
         final_node = None
         final_cost = 0
 
         # main loop
         self._put_new_nodes(self.start_node)
         while not self.open_list.empty():
-            current_step = self.open_list.get()
-            current_node = current_step[2]
-            if current_node.heuristic < 0.01:
-                solution_found = True
-                final_node = current_node
-                final_cost = final_node.total_cost
-                break
-            else:
-                self._put_new_nodes(current_node)
+            # improve solution
+            while not self.open_list.empty():
+                current_step = self.open_list.get()
+                current_priority, _, current_node = current_step
+                current_e = -1 * current_priority
+                if(time.time()-debug_time > 1):
+                    debug_time = time.time()
+                    print(current_e)
+                if current_e < self.E:
+                    self.E = current_e
+                if self._is_goal(current_node):
+                    self.G = current_node.total_cost
+                    solution_found = True
+                    final_node = current_node
+                    final_cost = final_node.total_cost
+                    break
+                else:
+                    self._put_new_nodes(current_node)
+            print('[ANA* {}]Solution E={:.4f} G={:.4f}'.format(
+                self.n_connected,
+                self.E,
+                self.G
+            ))
+            print('[ANA* {}]Solution Cost={:.4f} time={:.4f}'.format(
+                self.n_connected,
+                final_cost,
+                time.time() - start_time
+            ))
+            self.close_list = {}
+            self._update_open_list()
 
         # get path
         path = [final_node.get_config()]
@@ -152,11 +199,7 @@ class AstarSearch():
 
         # print statics
         if solution_found:
-            print('[A* {}]   Solution Cost={:.4f} time={:.4f}'.format(
-                self.n_connected,
-                final_cost,
-                time.time() - start_time
-            ))
+            print('Solution Found!')
         else:
             print('No Solution Found')
 
@@ -168,5 +211,5 @@ class AstarSearch():
 
 
 if __name__ == '__main__':
-    astar = AstarSearch(n_connected=8, grid_size=[0.6, 0.1, np.pi/2])
-    astar.search(use_gui=False)
+    ana = ANASearch(n_connected=8, grid_size=[0.6, 0.1, np.pi/2])
+    ana.search(use_gui=False)
