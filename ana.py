@@ -88,7 +88,7 @@ class ANASearch(AstarSearch):
                     solution_found = True
                     final_node = current_node
                     final_cost = final_node.total_cost
-                    history.append((final_node, final_cost))
+                    history.append((final_node, final_cost, time.time() - start_time))
                     color = [max(1-0.2*(len(history)-1), 0) for i in range(3)]
                     path = self._draw_path(final_node, color=color, z=0.1+len(history)*0.1)
                     break
@@ -114,8 +114,10 @@ class ANASearch(AstarSearch):
             #     execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
         else:
             self._print('No Solution Found')
+        if self.interact:
+            wait_if_gui()
         disconnect()
-        return len(history)
+        return history 
 
 
 if __name__ == '__main__':
