@@ -11,7 +11,7 @@ def search(i, foundit, quit):
     while not quit.is_set():
         seed = random.randint(1,100000)
         random.seed(seed)
-        print('=== [Start: Seed={}]  ==='.format(seed))
+        print('[Start: Seed={}]'.format(seed))
 
         # generate random scene
         # x_max, y_max, x_step, y_step, x_noise, y_noise = (8, 4, 1.5, 1.5, 1, 1)
@@ -52,9 +52,9 @@ def search(i, foundit, quit):
 
         path_len = ana.search(use_gui=False, map=playground_filename)
         if path_len>0:
-            print('=== [Stop:  Seed={}, path={}]  ==='.format(seed, path_len))
+            print('[Stop:  Seed={}, path={}]'.format(seed, path_len))
         if path_len>2:
-            print('=== [Found: Seed={}, path={}]  ==='.format(seed, path_len))
+            print('[Found: Seed={}, path={}]'.format(seed, path_len))
             foundit.set()
             return
 
