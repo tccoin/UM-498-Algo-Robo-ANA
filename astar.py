@@ -7,56 +7,15 @@ from pybullet_tools.utils import connect, disconnect, get_joint_positions, wait_
 from pybullet_tools.pr2_utils import PR2_GROUPS
 import pybullet as p
 
-
-class Node:
-    global_id = 0
-
-    def __init__(self, config_in, parent_in=None, goal_in=None, angle_disabled=False):
-        self.x = config_in[0]
-        self.y = config_in[1]
-        self.theta = config_in[2]
-        self.id = self.global_id + 1
-        Node.global_id += 1
-        self.parent = parent_in
-        if parent_in is not None:
-            self.total_cost = parent_in.total_cost + (self - parent_in)
-        else:
-            self.total_cost = 0
-        if goal_in is not None:
-            self.heuristic = self - goal_in
-
-    def get_config(self):
-        return (self.x, self.y, self.theta)
-
-    def __sub__(self, other):
-        # cost for one step
-        theta_diff = abs(self.theta - other.theta)
-        theta_diff = min(np.pi*2-theta_diff, theta_diff)
-        return np.sqrt(
-            (self.x-other.x)**2
-            + (self.y-other.y)**2
-            + theta_diff**2
-        )
-
-    def __str__(self):
-        return "\tNode id {}: x={:.2f}, y={:.2f}, theta={:.2f}, parentid={} g={:.2f} h={:.2f} f={:.2f}.".format(
-            self.id,
-            self.x,
-            self.y,
-            self.theta,
-            self.parent.id,
-            self.total_cost,
-            self.heuristic,
-            self.total_cost+self.heuristic
-        )
-
+from node import Node
 
 class AstarSearch():
-    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2], start_config=(-3.4, -1.4, np.pi/2), goal_config=(2.6, 1.4, -np.pi/2), timeout=0, camera_distance=3):
+    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2],start_config=(-9, -7, np.pi/2), goal_config=(9, 7, -np.pi/2), timeout=30, camera_distance=10):
         self.start_config = start_config
         self.goal_config = goal_config
         self.n_connected = n_connected
         self.grid_size = grid_size
+        self.timeout = timeout
         self.camera_distance = camera_distance
 
     def _angle_clip(self, angle):
@@ -94,6 +53,23 @@ class AstarSearch():
                 new_nodes += [Node(config, node, self.goal_node)]
         return new_nodes
 
+    def _draw_path(self, last_node, color=None):
+        path = [last_node.get_config()]
+        while last_node.parent is not None:
+            last_node = last_node.parent
+            path += [last_node.get_config()]
+        path.reverse()
+        if color is None:
+            color = (0, 0, 0)
+        last_point = None
+        for config in path:
+            point = list(config)
+            point[2] = 0.2
+            if last_point is not None:
+                draw_line(last_point, point, 10, color)
+            last_point = point
+        return path
+
     def _put_new_nodes(self, current_node):
         new_nodes = self._generate_new_nodes(current_node)
         for node in new_nodes:
@@ -101,15 +77,6 @@ class AstarSearch():
                 self.open_list.put(
                     (node.total_cost+node.heuristic, node.id, node))
                 self.close_list[node.get_config()] = 1
-
-    def _draw_path(self, path):
-        last_point = None
-        for config in path:
-            point = list(config)
-            point[2] = 0.2
-            if last_point is not None:
-                draw_line(last_point, point, 10, (0, 0, 0))
-            last_point = point
 
     def _is_goal(self, node):
         return node.heuristic < self.grid_size[0]
@@ -140,6 +107,7 @@ class AstarSearch():
         start_time = time.time()
         final_node = None
         final_cost = 0
+        path = []
 
         # main loop
         self._put_new_nodes(self.start_node)
@@ -162,12 +130,7 @@ class AstarSearch():
                 time.time() - start_time
             ))
             # draw path
-            path = [final_node.get_config()]
-            while final_node.parent is not None:
-                final_node = final_node.parent
-                path += [final_node.get_config()]
-            path.reverse()
-            self._draw_path(path)
+            path = self._draw_path(final_node, color=color)
             # Execute planned path
             if use_gui:
                 execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
