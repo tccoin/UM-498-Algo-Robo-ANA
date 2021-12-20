@@ -5,17 +5,17 @@ from playground_generator import PybulletPlayground
 import random
 import multiprocessing as mp
 
-def search(i, foundit, quit):
+def search(i):
     path_len = 0
 
-    while not quit.is_set():
+    while True:
         seed = random.randint(1,100000)
         random.seed(seed)
         print('[Start: Seed={}]'.format(seed))
 
         # generate random scene
         # x_max, y_max, x_step, y_step, x_noise, y_noise = (8, 4, 1.5, 1.5, 1, 1)
-        x_max, y_max, x_step, y_step, x_noise, y_noise = (8, 6, 2, 2, 1, 1)
+        x_max, y_max, x_step, y_step, x_noise, y_noise = (5, 3, 1.5, 1.5, 1, 1)
         floor_size = (x_max*2, y_max*2)
         obstacle_config = [
             (
@@ -40,9 +40,9 @@ def search(i, foundit, quit):
             'grid_size': [0.1, 0.1, np.pi/2],
             'start_config': (-x_max+0.5, 0, np.pi/2),
             'goal_config': (x_max-1, 0, -np.pi/2),
-            'timeout': 300,
+            'timeout': 600,
             'camera_distance': 10,
-            'angle_disabled': True,
+            'angle_disabled': False,
             'verbose': False
         }
 
@@ -50,23 +50,19 @@ def search(i, foundit, quit):
         ana = ANASearch(**args)
         astar = AstarSearch(**args)
 
-        path_len = ana.search(use_gui=False, map=playground_filename)
-        if path_len>0:
-            print('[Stop:  Seed={}, path={}]'.format(seed, path_len))
+        history_ana = ana.search(use_gui=False, map=playground_filename)
+        path_len = len(history_ana)
         if path_len>2:
             print('[Found: Seed={}, path={}]'.format(seed, path_len))
-            foundit.set()
             return
+        elif path_len>0:
+            print('[Stop:  Seed={}, path={}]'.format(seed, path_len))
 
 if __name__ == '__main__':
     process_list = []
-    quit = mp.Event()
-    foundit = mp.Event()
     for i in range(mp.cpu_count()):
-        p = mp.Process(target=search, args=(i, foundit, quit))
+        p = mp.Process(target=search, args=(i,))
         process_list.append(p)
         p.start()
-    # for p in process_list:
-    #     p.join()
-    foundit.wait()
-    quit.set()
+    for p in process_list:
+        p.join()
