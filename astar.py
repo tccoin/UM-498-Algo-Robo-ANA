@@ -7,16 +7,21 @@ from pybullet_tools.utils import connect, disconnect, get_joint_positions, wait_
 from pybullet_tools.pr2_utils import PR2_GROUPS
 import pybullet as p
 
-from node import Node
+from node import Node, Node2D
 
 class AstarSearch():
-    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2],start_config=(-9, -7, np.pi/2), goal_config=(9, 7, -np.pi/2), timeout=30, camera_distance=10):
+    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2],start_config=(-9, -7, np.pi/2), goal_config=(9, 7, -np.pi/2), timeout=30, camera_distance=10, angle_disabled=False, create_node=None, verbose=True):
+        if create_node is None:
+            create_node = Node2D if angle_disabled else Node
         self.start_config = start_config
         self.goal_config = goal_config
         self.n_connected = n_connected
         self.grid_size = grid_size
         self.timeout = timeout
         self.camera_distance = camera_distance
+        self.angle_disabled = angle_disabled
+        self.create_node = create_node
+        self.verbose = verbose
 
     def _angle_clip(self, angle):
         if angle >= np.pi:
@@ -39,21 +44,26 @@ class AstarSearch():
             new_configs[3][1] -= self.grid_size[1]
             new_configs[4][2] = self._angle_clip(config[2] + self.grid_size[2])
             new_configs[5][2] = self._angle_clip(config[2] - self.grid_size[2])
+            if self.angle_disabled:
+                new_configs = new_configs[:4]
         elif self.n_connected == 8:
             x, y, theta = config
-            product = itertools.product(
+            components = [
                 (x, x+self.grid_size[0], x-self.grid_size[0]),
                 (y, y+self.grid_size[1], y-self.grid_size[1]),
-                (theta, theta+self.grid_size[2], theta-self.grid_size[2]),
-            )
+                (theta, theta+self.grid_size[2], theta-self.grid_size[2])
+            ]
+            if self.angle_disabled:
+                components = components[:2]+[(0,)]
+            product = itertools.product(*components)
             new_configs = [tuple(item) for item in product][1:]
         new_nodes = []
         for config in new_configs:
             if not self.collision_fn(config):
-                new_nodes += [Node(config, node, self.goal_node)]
+                new_nodes += [self.create_node(config, node, self.goal_node)]
         return new_nodes
 
-    def _draw_path(self, last_node, color=None):
+    def _draw_path(self, last_node, color=None, z=0.2):
         path = [last_node.get_config()]
         while last_node.parent is not None:
             last_node = last_node.parent
@@ -64,7 +74,7 @@ class AstarSearch():
         last_point = None
         for config in path:
             point = list(config)
-            point[2] = 0.2
+            point[2] = z
             if last_point is not None:
                 draw_line(last_point, point, 10, color)
             last_point = point
@@ -80,6 +90,10 @@ class AstarSearch():
 
     def _is_goal(self, node):
         return node.heuristic < self.grid_size[0]
+
+    def _print(self, *args):
+        if self.verbose:
+            print(*args)
 
     def _set_camera(self):
         p.resetDebugVisualizerCamera(self.camera_distance, 0, -89.99, [0,0,0])
@@ -99,8 +113,8 @@ class AstarSearch():
         goal_config = (2.6, -1.3, -np.pi/2)
         self.open_list = PriorityQueue()
         self.close_list = {}
-        self.start_node = Node(start_config)
-        self.goal_node = Node(self.goal_config)
+        self.start_node = self.create_node(start_config)
+        self.goal_node = self.create_node(self.goal_config)
         solution_found = False
 
         # statics
@@ -124,21 +138,20 @@ class AstarSearch():
 
         # print statics
         if solution_found:
-            print('[A* {}]   Solution Cost={:.4f} time={:.4f}'.format(
+            self._print('[A* {}]   Solution Cost={:.4f} time={:.4f}'.format(
                 self.n_connected,
                 final_cost,
                 time.time() - start_time
             ))
             # draw path
-            path = self._draw_path(final_node, color=color)
+            path = self._draw_path(final_node)
             # Execute planned path
             if use_gui:
                 execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
         else:
-            print('No Solution Found')
-
-        wait_if_gui()
+            self._print('No Solution Found')
         disconnect()
+        return 1 if solution_found else 0
 
 
 if __name__ == '__main__':

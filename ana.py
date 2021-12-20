@@ -7,7 +7,6 @@ from pybullet_tools.pr2_utils import PR2_GROUPS
 import random
 
 from astar import AstarSearch
-from node import Node
 
 class ANASearch(AstarSearch):
 
@@ -48,16 +47,16 @@ class ANASearch(AstarSearch):
         start_config = tuple(self.start_config)
         self.open_list = {}
         self.visited_list = {}
-        self.start_node = Node(start_config)
-        self.goal_node = Node(self.goal_config)
+        self.start_node = self.create_node(start_config)
+        self.goal_node = self.create_node(self.goal_config)
         self.history = []
         self.G = 10000000
         self.E = 10000000
         solution_found = False
-        print('start point:', start_config)
-        print('goal point:', self.goal_config)
+        self._print('start point:', start_config)
+        self._print('goal point:', self.goal_config)
         if self.collision_fn(list(self.goal_config)):
-            print('=== Invalid goal!! ===')
+            self._print('=== Invalid goal!! ===')
             disconnect()
             return
 
@@ -80,7 +79,7 @@ class ANASearch(AstarSearch):
                 current_priority = current_step[0][0]
                 current_node = current_step[0][2]
                 current_e = -1 * current_priority
-                # print(current_node.get_config(), current_priority)
+                # self._print(current_node.get_config(), current_priority)
                 self.open_list.pop(current_node.get_config())
                 if current_e < self.E:
                     self.E = current_e
@@ -91,7 +90,7 @@ class ANASearch(AstarSearch):
                     final_cost = final_node.total_cost
                     history.append((final_node, final_cost))
                     color = [max(1-0.2*(len(history)-1), 0) for i in range(3)]
-                    path = self._draw_path(final_node, color=color)
+                    path = self._draw_path(final_node, color=color, z=0.1+len(history)*0.1)
                     break
                 else:
                     self._put_new_nodes(current_node)
@@ -99,7 +98,7 @@ class ANASearch(AstarSearch):
                     self.open_list = {}
                     break
             if not time.time()-start_time > self.timeout:
-                print('[ANA* {}] Solution Cost={} time={:.4f}'.format(
+                self._print('[ANA* {}] Solution Cost={} time={:.4f}'.format(
                     self.n_connected,
                     final_cost,
                     time.time() - start_time
@@ -109,15 +108,14 @@ class ANASearch(AstarSearch):
 
         # print statics
         if solution_found:
-            print('Solution Found!')
             # Execute planned path
-            if use_gui:
-                execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
+            self._print('{} Solution Found!'.format(len(history)))
+            # if use_gui:
+            #     execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
         else:
-            print('No Solution Found')
-
-        wait_if_gui()
+            self._print('No Solution Found')
         disconnect()
+        return len(history)
 
 
 if __name__ == '__main__':
