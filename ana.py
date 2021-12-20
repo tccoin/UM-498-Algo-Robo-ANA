@@ -1,4 +1,5 @@
 import time
+import heapq
 import itertools
 from queue import PriorityQueue
 import numpy as np
@@ -6,7 +7,7 @@ from utils import get_collision_fn_PR2, load_env, execute_trajectory, draw_spher
 from pybullet_tools.utils import connect, disconnect, get_joint_positions, wait_if_gui, set_joint_positions, joint_from_name, get_link_pose, link_from_name
 from pybullet_tools.pr2_utils import PR2_GROUPS
 import pybullet as p
-
+import random
 
 class Node:
     global_id = 0
@@ -37,22 +38,22 @@ class Node:
             + (self.y-other.y)**2
             + theta_diff**2
         )
+    
+    def __repr__(self):
+        return self.__str__()
 
     def __str__(self):
-        return "\tNode id {}: x={:.2f}, y={:.2f}, theta={:.2f}, parentid={} g={:.2f} h={:.2f} f={:.2f}.".format(
+        return "Node id {}: x={:.2f}, y={:.2f}, theta={:.2f}, parentid={}".format(
             self.id,
             self.x,
             self.y,
             self.theta,
-            self.parent.id,
-            self.total_cost,
-            self.heuristic,
-            self.total_cost+self.heuristic
+            self.parent.id
         )
 
 
 class ANASearch():
-    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2],start_config=(-3.4, -1.4, np.pi/2), goal_config=(3.4, 1.4, -np.pi/2), timeout=30, camera_distance=3):
+    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2],start_config=(-9, -7, np.pi/2), goal_config=(9, 7, -np.pi/2), timeout=30, camera_distance=10):
         self.start_config = start_config
         self.goal_config = goal_config
         self.n_connected = n_connected
@@ -96,14 +97,19 @@ class ANASearch():
         return new_nodes
 
     def _put_new_nodes(self, current_node):
-        # self.close_list[current_node.get_config()] = 1
+        self.visited_list[current_node.get_config()] = current_node.total_cost
         new_nodes = self._generate_new_nodes(current_node)
         for node in new_nodes:
-            if (node.total_cost+node.heuristic < self.G):
-            # if (node.total_cost+node.heuristic < self.G) and (not node.get_config() in self.close_list):
+            if node.total_cost+node.heuristic < self.G:
+                config = node.get_config()
+                if config in self.open_list:
+                    if node.total_cost>=self.open_list[config][2].total_cost:
+                        continue
+                if config in self.visited_list:
+                    if node.total_cost>=self.visited_list[config]:
+                        continue
                 e = (self.G-node.total_cost)/(node.heuristic+0.001)
-                print(node.get_config(),e,node.total_cost)
-                self.open_list.put((-1*e, node.id, node))
+                self.open_list[config] = (-e, random.random(), node)
 
     def _draw_path(self, last_node, color=None):
         path = [last_node.get_config()]
@@ -120,26 +126,21 @@ class ANASearch():
             if last_point is not None:
                 draw_line(last_point, point, 10, color)
             last_point = point
+        return path
 
     def _update_open_list(self):
-        node_map = {}
-        while not self.open_list.empty():
-            e, _, node = self.open_list.get()
-            config = node.get_config()
+        for config, (_,_,node) in self.open_list.copy().items():
             if node.total_cost+node.heuristic >= self.G:
-                continue
-            if (not config in node_map) or (node.total_cost < node_map[config].total_cost):
-                node_map[config] = node
-        self.open_list = PriorityQueue()
-        for _, node in node_map.items():
-            e = (self.G-node.total_cost)/node.heuristic
-            self.open_list.put((-1*e, node.id, node))
+                self.open_list.pop(node.get_config())
+            else:
+                e = (self.G-node.total_cost)/(node.heuristic+0.001)
+                self.open_list[config] = (-e, random.random(), node)
 
     def _is_goal(self, node):
         return node.heuristic < self.grid_size[0]
 
     def _set_camera(self):
-        p.resetDebugVisualizerCamera(self.camera_distance, 0, -89, [0,0,0])
+        p.resetDebugVisualizerCamera(self.camera_distance, 0, -89.99, [0,0,0])
 
     def search(self, use_gui=True, map='pr2playground.json'):
         # init PyBullet
@@ -153,13 +154,13 @@ class ANASearch():
 
         # init states
         start_config = tuple(self.start_config)
-        self.open_list = PriorityQueue()
+        self.open_list = {}
+        self.visited_list = {}
         self.start_node = Node(start_config)
         self.goal_node = Node(self.goal_config)
-        self.close_list = {}
         self.history = []
-        self.G = 1000000
-        self.E = 1000000
+        self.G = 10000000
+        self.E = 10000000
         solution_found = False
         print('start point:', start_config)
         print('goal point:', self.goal_config)
@@ -174,18 +175,21 @@ class ANASearch():
         final_node = None
         final_cost = 0
         history = []
+        path = []
 
         # main loop
         self._put_new_nodes(self.start_node)
-        while not self.open_list.empty():
+        while len(self.open_list)>0:
             # improve solution
-            while not self.open_list.empty():
-                current_step = self.open_list.get()
-                current_priority, _, current_node = current_step
+            while len(self.open_list)>0:
+                open_list_minheap = [(v,k) for k,v in self.open_list.items()]
+                heapq.heapify(open_list_minheap)
+                current_step = heapq.heappop(open_list_minheap)
+                current_priority = current_step[0][0]
+                current_node = current_step[0][2]
                 current_e = -1 * current_priority
-                # if(time.time()-debug_time > 1):
-                #     debug_time = time.time()
-                #     print(current_e)
+                # print(current_node.get_config(), current_priority)
+                self.open_list.pop(current_node.get_config())
                 if current_e < self.E:
                     self.E = current_e
                 if self._is_goal(current_node):
@@ -194,13 +198,13 @@ class ANASearch():
                     final_node = current_node
                     final_cost = final_node.total_cost
                     history.append((final_node, final_cost))
-                    color = [max(0, 285-100*len(history)) for i in range(3)]
-                    self._draw_path(final_node, color=())
+                    color = [max(1-0.2*(len(history)-1), 0) for i in range(3)]
+                    path = self._draw_path(final_node, color=color)
                     break
                 else:
                     self._put_new_nodes(current_node)
                 if time.time()-start_time > self.timeout:
-                    self.open_list = PriorityQueue()
+                    self.open_list = {}
                     break
             if not time.time()-start_time > self.timeout:
                 print('[ANA* {}] Solution Cost={} time={:.4f}'.format(
@@ -208,15 +212,12 @@ class ANASearch():
                     final_cost,
                     time.time() - start_time
                 ))
-                self.close_list = {}
                 self._update_open_list()
 
 
         # print statics
         if solution_found:
             print('Solution Found!')
-            # draw path
-            # self._draw_path(final_node)
             # Execute planned path
             if use_gui:
                 execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)

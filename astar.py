@@ -11,7 +11,7 @@ import pybullet as p
 class Node:
     global_id = 0
 
-    def __init__(self, config_in, parent_in=None, goal_in=None):
+    def __init__(self, config_in, parent_in=None, goal_in=None, angle_disabled=False):
         self.x = config_in[0]
         self.y = config_in[1]
         self.theta = config_in[2]
@@ -115,7 +115,7 @@ class AstarSearch():
         return node.heuristic < self.grid_size[0]
 
     def _set_camera(self):
-        p.resetDebugVisualizerCamera(self.camera_distance, 0, -89, [0,0,0])
+        p.resetDebugVisualizerCamera(self.camera_distance, 0, -89.99, [0,0,0])
 
     def search(self, use_gui=True, map='pr2playground.json'):
         # init PyBullet
