@@ -5,6 +5,7 @@ import numpy as np
 from utils import get_collision_fn_PR2, load_env, execute_trajectory, draw_sphere_marker,  draw_sphere_marker, draw_line
 from pybullet_tools.utils import connect, disconnect, get_joint_positions, wait_if_gui, set_joint_positions, joint_from_name, get_link_pose, link_from_name
 from pybullet_tools.pr2_utils import PR2_GROUPS
+import pybullet as p
 
 
 class Node:
@@ -51,11 +52,13 @@ class Node:
 
 
 class ANASearch():
-    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2], goal_config=(2.6, 1.4, -np.pi/2), timeout=30):
+    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2],start_config=(-3.4, -1.4, np.pi/2), goal_config=(3.4, 1.4, -np.pi/2), timeout=30, camera_distance=3):
+        self.start_config = start_config
         self.goal_config = goal_config
         self.n_connected = n_connected
         self.grid_size = grid_size
         self.timeout = timeout
+        self.camera_distance = camera_distance
 
     def _angle_clip(self, angle):
         if angle >= np.pi:
@@ -93,20 +96,29 @@ class ANASearch():
         return new_nodes
 
     def _put_new_nodes(self, current_node):
-        self.close_list[current_node.get_config()] = 1
+        # self.close_list[current_node.get_config()] = 1
         new_nodes = self._generate_new_nodes(current_node)
         for node in new_nodes:
-            if (node.total_cost+node.heuristic < self.G) and (not node.get_config() in self.close_list):
+            if (node.total_cost+node.heuristic < self.G):
+            # if (node.total_cost+node.heuristic < self.G) and (not node.get_config() in self.close_list):
                 e = (self.G-node.total_cost)/(node.heuristic+0.001)
+                print(node.get_config(),e,node.total_cost)
                 self.open_list.put((-1*e, node.id, node))
 
-    def _draw_path(self, path):
+    def _draw_path(self, last_node, color=None):
+        path = [last_node.get_config()]
+        while last_node.parent is not None:
+            last_node = last_node.parent
+            path += [last_node.get_config()]
+        path.reverse()
+        if color is None:
+            color = (0, 0, 0)
         last_point = None
         for config in path:
             point = list(config)
             point[2] = 0.2
             if last_point is not None:
-                draw_line(last_point, point, 10, (0, 0, 0))
+                draw_line(last_point, point, 10, color)
             last_point = point
 
     def _update_open_list(self):
@@ -124,19 +136,23 @@ class ANASearch():
             self.open_list.put((-1*e, node.id, node))
 
     def _is_goal(self, node):
-        return node.heuristic < 0.01
+        return node.heuristic < self.grid_size[0]
 
-    def search(self, use_gui=True):
+    def _set_camera(self):
+        p.resetDebugVisualizerCamera(self.camera_distance, 0, -89, [0,0,0])
+
+    def search(self, use_gui=True, map='pr2playground.json'):
         # init PyBullet
         connect(use_gui=use_gui)
-        robots, obstacles = load_env('pr2playground.json')
+        robots, obstacles = load_env(map)
         base_joints = [joint_from_name(robots['pr2'], name)
                        for name in PR2_GROUPS['base']]
         self.collision_fn = get_collision_fn_PR2(
             robots['pr2'], base_joints, list(obstacles.values()))
+        self._set_camera()
 
         # init states
-        start_config = tuple(get_joint_positions(robots['pr2'], base_joints))
+        start_config = tuple(self.start_config)
         self.open_list = PriorityQueue()
         self.start_node = Node(start_config)
         self.goal_node = Node(self.goal_config)
@@ -145,12 +161,19 @@ class ANASearch():
         self.G = 1000000
         self.E = 1000000
         solution_found = False
+        print('start point:', start_config)
+        print('goal point:', self.goal_config)
+        if self.collision_fn(list(self.goal_config)):
+            print('=== Invalid goal!! ===')
+            disconnect()
+            return
 
         # statics
         start_time = time.time()
         debug_time = time.time()
         final_node = None
         final_cost = 0
+        history = []
 
         # main loop
         self._put_new_nodes(self.start_node)
@@ -170,17 +193,15 @@ class ANASearch():
                     solution_found = True
                     final_node = current_node
                     final_cost = final_node.total_cost
+                    history.append((final_node, final_cost))
+                    color = [max(0, 285-100*len(history)) for i in range(3)]
+                    self._draw_path(final_node, color=())
                     break
                 else:
                     self._put_new_nodes(current_node)
                 if time.time()-start_time > self.timeout:
                     self.open_list = PriorityQueue()
                     break
-            # print('[ANA* {}]Solution E={:.4f} G={:.4f}'.format(
-            #     self.n_connected,
-            #     self.E,
-            #     self.G
-            # ))
             if not time.time()-start_time > self.timeout:
                 print('[ANA* {}] Solution Cost={} time={:.4f}'.format(
                     self.n_connected,
@@ -190,26 +211,22 @@ class ANASearch():
                 self.close_list = {}
                 self._update_open_list()
 
-        # get path
-        path = [final_node.get_config()]
-        while final_node.parent is not None:
-            final_node = final_node.parent
-            path += [final_node.get_config()]
-        path.reverse()
 
         # print statics
         if solution_found:
             print('Solution Found!')
+            # draw path
+            # self._draw_path(final_node)
+            # Execute planned path
+            if use_gui:
+                execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
         else:
             print('No Solution Found')
 
-        # Execute planned path
-        if use_gui:
-            execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
         wait_if_gui()
         disconnect()
 
 
 if __name__ == '__main__':
-    ana = ANASearch(n_connected=8, grid_size=[0.6, 0.1, np.pi/2])
-    ana.search(use_gui=False)
+    ana = ANASearch(n_connected=4, grid_size=[0.1, 0.1, np.pi/2])
+    ana.search(use_gui=True)

@@ -5,6 +5,7 @@ import numpy as np
 from utils import get_collision_fn_PR2, load_env, execute_trajectory, draw_sphere_marker,  draw_sphere_marker, draw_line
 from pybullet_tools.utils import connect, disconnect, get_joint_positions, wait_if_gui, set_joint_positions, joint_from_name, get_link_pose, link_from_name
 from pybullet_tools.pr2_utils import PR2_GROUPS
+import pybullet as p
 
 
 class Node:
@@ -51,10 +52,12 @@ class Node:
 
 
 class AstarSearch():
-    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2], goal_config=(2.6, 1.4, -np.pi/2)):
+    def __init__(self, n_connected=4, grid_size=[0.1, 0.1, np.pi/2], start_config=(-3.4, -1.4, np.pi/2), goal_config=(2.6, 1.4, -np.pi/2), timeout=0, camera_distance=3):
+        self.start_config = start_config
         self.goal_config = goal_config
         self.n_connected = n_connected
         self.grid_size = grid_size
+        self.camera_distance = camera_distance
 
     def _angle_clip(self, angle):
         if angle >= np.pi:
@@ -108,17 +111,24 @@ class AstarSearch():
                 draw_line(last_point, point, 10, (0, 0, 0))
             last_point = point
 
-    def search(self, use_gui=True):
+    def _is_goal(self, node):
+        return node.heuristic < self.grid_size[0]
+
+    def _set_camera(self):
+        p.resetDebugVisualizerCamera(self.camera_distance, 0, -89, [0,0,0])
+
+    def search(self, use_gui=True, map='pr2playground.json'):
         # init PyBullet
         connect(use_gui=use_gui)
-        robots, obstacles = load_env('pr2playground.json')
+        robots, obstacles = load_env(map)
         base_joints = [joint_from_name(robots['pr2'], name)
                        for name in PR2_GROUPS['base']]
         self.collision_fn = get_collision_fn_PR2(
             robots['pr2'], base_joints, list(obstacles.values()))
+        self._set_camera()
 
         # init states
-        start_config = tuple(get_joint_positions(robots['pr2'], base_joints))
+        start_config = tuple(self.start_config)
         goal_config = (2.6, -1.3, -np.pi/2)
         self.open_list = PriorityQueue()
         self.close_list = {}
@@ -136,20 +146,13 @@ class AstarSearch():
         while not self.open_list.empty():
             current_step = self.open_list.get()
             current_node = current_step[2]
-            if current_node.heuristic < 0.01:
+            if self._is_goal(current_node):
                 solution_found = True
                 final_node = current_node
                 final_cost = final_node.total_cost
                 break
             else:
                 self._put_new_nodes(current_node)
-
-        # get path
-        path = [final_node.get_config()]
-        while final_node.parent is not None:
-            final_node = final_node.parent
-            path += [final_node.get_config()]
-        path.reverse()
 
         # print statics
         if solution_found:
@@ -158,12 +161,19 @@ class AstarSearch():
                 final_cost,
                 time.time() - start_time
             ))
+            # draw path
+            path = [final_node.get_config()]
+            while final_node.parent is not None:
+                final_node = final_node.parent
+                path += [final_node.get_config()]
+            path.reverse()
+            self._draw_path(path)
+            # Execute planned path
+            if use_gui:
+                execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
         else:
             print('No Solution Found')
 
-        # Execute planned path
-        if use_gui:
-            execute_trajectory(robots['pr2'], base_joints, path, sleep=0.2)
         wait_if_gui()
         disconnect()
 
