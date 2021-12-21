@@ -24,8 +24,7 @@ class Node:
         # cost for one step
         theta_diff = abs(self.theta - other.theta)
         theta_diff = min(np.pi*2-theta_diff, theta_diff)
-        if self.__class__.__name__.find('2D') != -1:
-            theta_diff = 0
+        theta_diff = theta_diff if self.__class__.__name__.find('2D') == -1 else 0
         return np.sqrt(
             (self.x-other.x)**2
             + (self.y-other.y)**2
@@ -47,3 +46,32 @@ class Node:
 class Node2D(Node):
     def __init__(self, *args):
         super(Node2D, self).__init__(*args)
+
+class ManhattanDistanceNode(Node):
+    def __sub__(self, other):
+        # cost for one step
+        dx = abs(self.x-other.x)
+        dy = abs(self.y-other.y)
+        theta_diff = abs(self.theta - other.theta)
+        theta_diff = min(np.pi*2-theta_diff, theta_diff)
+        theta_diff = theta_diff if self.__class__.__name__.find('2D') == -1 else 0
+        return dx+dy+theta_diff
+
+class ManhattanDistanceNode2D(ManhattanDistanceNode):
+    def __init__(self, *args):
+        super(ManhattanDistanceNode2D, self).__init__(*args)
+
+class DiagonalDistanceNode(Node):
+    def __sub__(self, other):
+        # cost for one step
+        dx = abs(self.x-other.x)
+        dy = abs(self.y-other.y)
+        theta_diff = abs(self.theta - other.theta)
+        theta_diff = min(np.pi*2-theta_diff, theta_diff)
+        theta_diff = theta_diff if self.__class__.__name__.find('2D') == -1 else 0
+        return dx+dy+(np.sqrt(2)-2)*min(dx,dy)+theta_diff
+
+
+class DiagonalDistanceNode2D(DiagonalDistanceNode):
+    def __init__(self, *args):
+        super(DiagonalDistanceNode2D, self).__init__(*args)

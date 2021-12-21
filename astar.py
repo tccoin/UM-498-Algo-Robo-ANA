@@ -165,7 +165,8 @@ class AstarSearch():
         else:
             self._print('No Solution Found')
         if self.interact:
-            wait_if_gui()
+            print('Get a Screenshot!!')
+            time.sleep(60)
         disconnect()
         return history
 

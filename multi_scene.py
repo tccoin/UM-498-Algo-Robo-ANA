@@ -15,7 +15,7 @@ def search(i):
 
         # generate random scene
         # x_max, y_max, x_step, y_step, x_noise, y_noise = (8, 4, 1.5, 1.5, 1, 1)
-        x_max, y_max, x_step, y_step, x_noise, y_noise = (5, 3, 1.5, 1.5, 1, 1)
+        x_max, y_max, x_step, y_step, x_noise, y_noise = (6, 4, 1.5, 2, 1, 0.5)
         floor_size = (x_max*2, y_max*2)
         obstacle_config = [
             (
@@ -36,13 +36,13 @@ def search(i):
 
         # set searching arguments
         args = {
-            'n_connected': 8,
+            'n_connected': 4,
             'grid_size': [0.1, 0.1, np.pi/2],
             'start_config': (-x_max+0.5, 0, np.pi/2),
             'goal_config': (x_max-1, 0, -np.pi/2),
-            'timeout': 600,
+            'timeout': 300,
             'camera_distance': 10,
-            'angle_disabled': False,
+            'angle_disabled': True,
             'verbose': False
         }
 
@@ -60,7 +60,7 @@ def search(i):
 
 if __name__ == '__main__':
     process_list = []
-    for i in range(mp.cpu_count()):
+    for i in range(mp.cpu_count()-2):
         p = mp.Process(target=search, args=(i,))
         process_list.append(p)
         p.start()

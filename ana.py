@@ -88,7 +88,7 @@ class ANASearch(AstarSearch):
                     solution_found = True
                     final_node = current_node
                     final_cost = final_node.total_cost
-                    history.append((final_node, final_cost, time.time() - start_time))
+                    history.append((final_node, final_cost, time.time() - start_time, self.E))
                     color = [max(1-0.2*(len(history)-1), 0) for i in range(3)]
                     path = self._draw_path(final_node, color=color, z=0.1+len(history)*0.1)
                     break
@@ -115,7 +115,8 @@ class ANASearch(AstarSearch):
         else:
             self._print('No Solution Found')
         if self.interact:
-            wait_if_gui()
+            print('Get a Screenshot!!')
+            time.sleep(60)
         disconnect()
         return history 
 

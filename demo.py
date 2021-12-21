@@ -5,11 +5,13 @@ from playground_generator import PybulletPlayground
 import random
 
 seed = 52421
+seed = 99117
 random.seed(seed)
 print(seed)
 
 # generate random scene
-x_max, y_max, x_step, y_step, x_noise, y_noise = (5, 3, 1.5, 1.5, 1, 1)
+# x_max, y_max, x_step, y_step, x_noise, y_noise = (5, 3, 1.5, 1.5, 1, 1)
+x_max, y_max, x_step, y_step, x_noise, y_noise = (6, 4, 1.5, 2, 1, 1)
 floor_size = (x_max*2, y_max*2)
 obstacle_config = [
     (
@@ -34,7 +36,7 @@ args = {
     'grid_size': [0.1, 0.1, np.pi/2],
     'start_config': (-x_max+0.5, 0, np.pi/2),
     'goal_config': (x_max-1, 0, -np.pi/2),
-    'timeout': 300,
+    'timeout': 500,
     'camera_distance': 8,
     'angle_disabled': False,
     'verbose': True,
@@ -45,6 +47,12 @@ args = {
 ana = ANASearch(**args)
 astar = AstarSearch(**args)
 
-print('Searching {}...'.format(playground_filename))
-ana.search(use_gui=True, map=playground_filename)
-astar.search(use_gui=True, map=playground_filename)
+history_ana = ana.search(use_gui=True, map=playground_filename)
+history_astar = astar.search(use_gui=True, map=playground_filename)
+print('[Seed={}]\ncost_ana={}\ntime_ana={}\ncost_astar={}\n'.format(
+    seed,
+    [x[1] for x in history_ana],
+    [x[2] for x in history_ana],
+    [x[1] for x in history_astar],
+    [x[2] for x in history_astar]
+))

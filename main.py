@@ -10,8 +10,8 @@ random.seed(seed)
 print(seed)
 
 # generate random scene
-# x_max, y_max, x_step, y_step, x_noise, y_noise = (8, 4, 1.5, 1.5, 1, 1)
-x_max, y_max, x_step, y_step, x_noise, y_noise = (10, 4, 2, 2, 1, 1)
+# x_max, y_max, x_step, y_step, x_noise, y_noise = (10, 4, 2, 2, 1, 1)
+x_max, y_max, x_step, y_step, x_noise, y_noise = (10, 10, 2, 2, 1, 1)
 floor_size = (x_max*2, y_max*2)
 obstacle_config = [
     (

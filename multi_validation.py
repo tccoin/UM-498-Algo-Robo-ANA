@@ -4,6 +4,7 @@ import numpy as np
 from playground_generator import PybulletPlayground
 import random
 import multiprocessing as mp
+import time
 
 def search(seed):
     random.seed(seed)
@@ -36,7 +37,7 @@ def search(seed):
         'grid_size': [0.1, 0.1, np.pi/2],
         'start_config': (-x_max+0.5, 0, np.pi/2),
         'goal_config': (x_max-1, 0, -np.pi/2),
-        'timeout': 3600,
+        'timeout': 500,
         'camera_distance': 8,
         'angle_disabled': True,
         'verbose': False,
@@ -48,18 +49,18 @@ def search(seed):
     astar = AstarSearch(**args)
 
     history_ana = ana.search(use_gui=False, map=playground_filename)
-    history_astar = astar.search(use_gui=False, map=playground_filename)
-    print('[Seed={}]\ncost_ana={}\ntime_ana={}\ncost_astar={}\n'.format(
+    # history_astar = astar.search(use_gui=False, map=playground_filename)
+    history_astar = [[],[]]
+    print('[Seed={}]\ncost_ana={}\ntime_ana={}\ninflation={}\n'.format(
         seed,
         [x[1] for x in history_ana],
         [x[2] for x in history_ana],
-        [x[1] for x in history_astar],
-        [x[2] for x in history_astar]
+        [x[3] for x in history_ana]
     ))
 
 if __name__ == '__main__':
     process_list = []
-    for seed in [54010,80105,51981,6045,19774,35556,49047]:
+    for seed in [80105,19774,54010]:
         p = mp.Process(target=search, args=(seed,))
         process_list.append(p)
         p.start()
