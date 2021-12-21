@@ -36,7 +36,7 @@ args = {
     'grid_size': [0.1, 0.1, np.pi/2],
     'start_config': (-x_max+0.5, 0, np.pi/2),
     'goal_config': (x_max-1, 0, -np.pi/2),
-    'timeout': 500,
+    'timeout': 1800,
     'camera_distance': 8,
     'angle_disabled': False,
     'verbose': True,
